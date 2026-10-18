@@ -69,17 +69,46 @@ public class JdbcTicketRepository implements TicketRepository {
         return list(sql, ps -> ps.setString(1, query));
     }
 
+
     @Override
     public int assign(long ticketId, long assigneeId) {
-        String sql = "UPDATE tickets SET assignee_id = ?, updated_at = CURRENT_TIMESTAMP";
-        try (Connection connection = Database.getConnection();
-             PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, assigneeId);
-            return ps.executeUpdate();
+        String selectSql = "SELECT id FROM tickets WHERE id = ?";
+        String updateSql = "UPDATE tickets SET assignee_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+
+        try (Connection connection = Database.getConnection()) {
+            try (PreparedStatement select = connection.prepareStatement(selectSql)) {
+                select.setLong(1, ticketId);
+
+                try (ResultSet rs = select.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new DataAccessException(
+                                "Заявка с ID " + ticketId + " не найдена",
+                                new SQLException("Заявка не существует")
+                        );
+                    }
+                }
+            }
+
+            try (PreparedStatement update = connection.prepareStatement(updateSql)) {
+                update.setLong(1, assigneeId);
+                update.setLong(2, ticketId);
+
+                int updated = update.executeUpdate();
+
+                if (updated != 1) {
+                    throw new DataAccessException(
+                            "Ожидалась одна изменённая заявка",
+                            new SQLException("Изменено строк: " + updated)
+                    );
+                }
+
+                return updated;
+            }
         } catch (SQLException e) {
             throw new DataAccessException("Ошибка назначения исполнителя", e);
         }
     }
+
 
     @Override
     public void changeStatusAndRecordHistory(long ticketId,
