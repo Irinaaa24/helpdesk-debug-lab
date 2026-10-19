@@ -110,36 +110,59 @@ public class JdbcTicketRepository implements TicketRepository {
 
 
     @Override
-    public void changeStatusAndRecordHistory(long ticketId,
-                                             TicketStatus oldStatus,
-                                             TicketStatus newStatus,
-                                             long changedBy) {
-        String update = "UPDATE tickets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    public void changeStatusAndRecordHistory(
+            long ticketId,
+            TicketStatus oldStatus,
+            TicketStatus newStatus,
+            long changedBy) {
+        String update = """
+            UPDATE tickets
+            SET status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """;
         String history = """
-                INSERT INTO ticket_status_history(ticket_id, old_status, new_status, changed_by)
-                VALUES (?, ?, ?, ?)
-                """;
+            INSERT INTO ticket_status_history(
+                ticket_id, old_status, new_status, changed_by
+            )
+            VALUES (?, ?, ?, ?)
+            """;
+        try (Connection connection = Database.getConnection()) {
+            boolean previousAutoCommit = connection.getAutoCommit();
+            try {
+                connection.setAutoCommit(false);
+                try (PreparedStatement ps = connection.prepareStatement(update)) {
+                    ps.setString(1, newStatus.name());
+                    ps.setLong(2, ticketId);
 
-        try (Connection connection = Database.getConnection();
-             PreparedStatement ps = connection.prepareStatement(update)) {
-            ps.setString(1, newStatus.name());
-            ps.setLong(2, ticketId);
-            if (ps.executeUpdate() != 1) {
-                throw new SQLException("Заявка не найдена: " + ticketId);
+                    if (ps.executeUpdate() != 1) {
+                        throw new SQLException("Заявка не найдена: " + ticketId);
+                    }
+                }
+                try (PreparedStatement ps = connection.prepareStatement(history)) {
+                    ps.setLong(1, ticketId);
+                    ps.setString(2, oldStatus.name());
+                    ps.setString(3, newStatus.name());
+                    ps.setLong(4, changedBy);
+                    ps.executeUpdate();
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+                throw e;
+            } finally {
+                try {
+                    connection.setAutoCommit(previousAutoCommit);
+                } catch (SQLException e) {
+                    // Не удалось восстановить режим автоматического подтверждения.
+                }
             }
         } catch (SQLException e) {
-            throw new DataAccessException("Не удалось изменить статус", e);
-        }
-
-        try (Connection connection = Database.getConnection();
-             PreparedStatement ps = connection.prepareStatement(history)) {
-            ps.setLong(1, ticketId);
-            ps.setString(2, oldStatus.name());
-            ps.setString(3, newStatus.name());
-            ps.setLong(4, changedBy);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            throw new DataAccessException("Не удалось записать историю статуса", e);
+            throw new DataAccessException(
+                    "Не удалось изменить статус и записать историю", e);
         }
     }
 
