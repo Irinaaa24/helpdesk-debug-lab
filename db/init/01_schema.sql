@@ -23,6 +23,7 @@ CREATE TABLE tickets (
     description TEXT NOT NULL,
     status VARCHAR(30) NOT NULL CHECK (status IN ('NEW', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')),
     priority VARCHAR(20) NOT NULL,
+        CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
     author_id BIGINT NOT NULL REFERENCES users(id),
     assignee_id BIGINT REFERENCES users(id),
     category_id BIGINT REFERENCES categories(id),
