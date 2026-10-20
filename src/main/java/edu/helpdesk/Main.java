@@ -10,6 +10,13 @@ import edu.helpdesk.repository.jdbc.JdbcCommentRepository;
 import edu.helpdesk.repository.jdbc.JdbcTicketRepository;
 import edu.helpdesk.repository.jdbc.JdbcUserRepository;
 import edu.helpdesk.service.TicketService;
+import edu.helpdesk.model.Tag;
+import edu.helpdesk.repository.TagRepository;
+import edu.helpdesk.repository.TicketTagRepository;
+import edu.helpdesk.repository.jdbc.JdbcTagRepository;
+import edu.helpdesk.repository.jdbc.JdbcTicketTagRepository;
+import edu.helpdesk.service.TagService;
+import java.util.List;
 
 import java.util.Scanner;
 
@@ -19,6 +26,15 @@ public class Main {
         UserRepository users = new JdbcUserRepository();
         CommentRepository comments = new JdbcCommentRepository();
         TicketService service = new TicketService(tickets, users, comments);
+
+        TagRepository tagRepository = new JdbcTagRepository();
+        TicketTagRepository ticketTagRepository = new JdbcTicketTagRepository();
+
+        TagService tagService = new TagService(
+                tagRepository,
+                ticketTagRepository,
+                tickets
+        );
 
         System.out.println("=== HELP DESK / DEBUG LAB ===");
         System.out.println("Учебный проект. Некоторые сценарии работают неверно — это часть задания.\n");
@@ -89,6 +105,79 @@ public class Main {
                             Long categoryId = categoryRaw.isBlank() ? null : Long.parseLong(categoryRaw);
                             System.out.println(service.createTicket(title, description, priority, authorId, categoryId));
                         }
+                        case "10" -> {
+                            System.out.print("Введите название тега: ");
+                            String name = scanner.nextLine();
+                            try {
+                                Tag tag = tagService.createTag(name);
+                                System.out.println("Тег создан: " + tag);
+                            } catch (IllegalArgumentException e) {
+                                System.out.println("Ошибка: " + e.getMessage());
+                            }
+                        }
+                        case "11" -> {
+                            System.out.println("Список тегов:");
+                            tagService.findAllTags().forEach(System.out::println);
+
+                            System.out.print("Введите ID заявки: ");
+                            long ticketId = Long.parseLong(scanner.nextLine());
+
+                            System.out.print("Введите ID тега: ");
+                            long tagId = Long.parseLong(scanner.nextLine());
+                            try {
+                                tagService.addTagToTicket(ticketId, tagId);
+                                System.out.println("Тег добавлен к заявке.");
+                            } catch (IllegalArgumentException e) {
+                                System.out.println("Ошибка: " + e.getMessage());
+                            }
+                        }
+                        case "12" -> {
+                            System.out.println("Список тегов:");
+                            tagService.findAllTags().forEach(System.out::println);
+                            System.out.print("Введите ID заявки: ");
+                            long ticketId = Long.parseLong(scanner.nextLine());
+                            System.out.print("Введите ID тега: ");
+                            long tagId = Long.parseLong(scanner.nextLine());
+                            try {
+                                tagService.removeTagFromTicket(ticketId, tagId);
+                                System.out.println("Связь тега с заявкой удалена.");
+                            } catch (IllegalArgumentException e) {
+                                System.out.println("Ошибка: " + e.getMessage());
+                            }
+                        }
+                        case "13" -> {
+                            System.out.print("Введите ID заявки: ");
+                            long ticketId = Long.parseLong(scanner.nextLine());
+                            try {
+                                System.out.println("Теги заявки:");
+                                List<Tag> tags = tagService.findTagsByTicket(ticketId);
+                                if (tags.isEmpty()) {
+                                    System.out.println("У заявки пока нет тегов.");
+                                } else {
+                                    tags.forEach(System.out::println);
+                                }
+                            } catch (IllegalArgumentException e) {
+                                System.out.println("Ошибка: " + e.getMessage());
+                            }
+                        }
+                        case "14" -> {
+                            System.out.println("Список тегов:");
+                            tagService.findAllTags().forEach(System.out::println);
+                            System.out.print("Введите ID тега: ");
+                            long tagId = Long.parseLong(scanner.nextLine());
+                            try {
+                                System.out.println("Заявки с этим тегом:");
+                                List<edu.helpdesk.model.Ticket> foundTickets =
+                                        tagService.findTicketsByTag(tagId);
+                                if (foundTickets.isEmpty()) {
+                                    System.out.println("Заявок с этим тегом нет.");
+                                } else {
+                                    foundTickets.forEach(System.out::println);
+                                }
+                            } catch (IllegalArgumentException e) {
+                                System.out.println("Ошибка: " + e.getMessage());
+                            }
+                        }
                         case "0" -> running = false;
                         default -> System.out.println("Неизвестная команда.");
                     }
@@ -113,8 +202,13 @@ public class Main {
                 6 — добавить комментарий
                 7 — комментарии заявки
                 8 — изменить статус
-                9 — создать заявку
-                0 — выход
+                9  — создать заявку
+                10 — создать тег
+                11 — добавить тег к заявке
+                12 — удалить тег из заявки
+                13 — показать теги заявки
+                14 — найти заявки по тегу
+                0  — выход
                 """);
     }
 }

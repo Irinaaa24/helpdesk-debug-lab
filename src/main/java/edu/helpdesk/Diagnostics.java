@@ -15,6 +15,12 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import edu.helpdesk.model.Tag;
+import edu.helpdesk.repository.TagRepository;
+import edu.helpdesk.repository.TicketTagRepository;
+import edu.helpdesk.repository.jdbc.JdbcTagRepository;
+import edu.helpdesk.repository.jdbc.JdbcTicketTagRepository;
+import edu.helpdesk.service.TagService;
 
 public class Diagnostics {
     private int passed;
@@ -39,6 +45,12 @@ public class Diagnostics {
         check("Статус и история изменяются атомарно", this::statusChangeIsAtomic);
         check("Email пользователя уникален на уровне БД", this::emailIsUnique);
         check("БД запрещает неизвестный приоритет", this::priorityIsConstrained);
+        check("Повторное добавление тега не создаёт дубликат",
+                this::duplicateTagIsPrevented);
+        check("Поиск по тегу не возвращает заявки-дубликаты",
+                this::ticketsByTagHaveNoDuplicates);
+        check("Удаление связи сохраняет заявку и тег",
+                this::removingTagLinkPreservesEntities);
 
         System.out.println("\nИтог: PASS=" + passed + ", FAIL=" + failed);
         System.out.println("Перед повторным запуском диагностики данные автоматически восстанавливаются для каждого теста.");
@@ -156,6 +168,68 @@ public class Diagnostics {
             rejected = true;
         }
         require(rejected, "БД приняла priority='SUPER'");
+    }
+    private TagService tagService() {
+        TicketRepository tickets = new JdbcTicketRepository();
+        TagRepository tags = new JdbcTagRepository();
+        TicketTagRepository ticketTags = new JdbcTicketTagRepository();
+
+        return new TagService(tags, ticketTags, tickets);
+    }
+
+    private void duplicateTagIsPrevented() throws Exception {
+        reset();
+
+        TagService service = tagService();
+        Tag tag = service.createTag("DIAGNOSTIC_DUPLICATE");
+
+        service.addTagToTicket(1, tag.getId());
+        service.addTagToTicket(1, tag.getId());
+
+        long count = service.findTagsByTicket(1).stream()
+                .filter(t -> t.getId().equals(tag.getId()))
+                .count();
+
+        require(count == 1,
+                "Ожидалась одна связь с тегом, получено: " + count);
+    }
+
+    private void ticketsByTagHaveNoDuplicates() throws Exception {
+        reset();
+
+        TagService service = tagService();
+        Tag tag = service.createTag("DIAGNOSTIC_SEARCH");
+
+        service.addTagToTicket(1, tag.getId());
+        service.addTagToTicket(2, tag.getId());
+
+        var found = service.findTicketsByTag(tag.getId());
+
+        long uniqueIds = found.stream()
+                .map(ticket -> ticket.getId())
+                .distinct()
+                .count();
+
+        require(found.size() == 2 && uniqueIds == found.size(),
+                "Найдены дубликаты или неверное количество заявок: "
+                        + found.size());
+    }
+
+    private void removingTagLinkPreservesEntities() throws Exception {
+        reset();
+        TagService service = tagService();
+        Tag tag = service.createTag("DIAGNOSTIC_REMOVE");
+        service.addTagToTicket(1, tag.getId());
+        service.removeTagFromTicket(1, tag.getId());
+        boolean ticketExists =
+                new JdbcTicketRepository().findById(1).isPresent();
+        boolean tagExists =
+                new JdbcTagRepository().findById(tag.getId()).isPresent();
+        boolean linkRemoved =
+                service.findTagsByTicket(1).stream()
+                        .noneMatch(t -> t.getId().equals(tag.getId()));
+        require(ticketExists && tagExists && linkRemoved,
+                "После удаления связи заявка или тег исчезли либо связь осталась");
     }
 
     private void reset() throws Exception {

@@ -52,3 +52,16 @@ CREATE INDEX idx_tickets_status ON tickets(status);
 CREATE INDEX idx_tickets_assignee ON tickets(assignee_id);
 CREATE INDEX idx_tickets_category ON tickets(category_id);
 CREATE INDEX idx_comments_ticket ON ticket_comments(ticket_id);
+
+CREATE TABLE tags (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE
+);
+CREATE TABLE ticket_tags (
+    ticket_id BIGINT NOT NULL
+        REFERENCES tickets(id) ON DELETE CASCADE,
+    tag_id BIGINT NOT NULL
+        REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (ticket_id, tag_id)
+);
+CREATE INDEX idx_ticket_tags_tag ON ticket_tags(tag_id);
