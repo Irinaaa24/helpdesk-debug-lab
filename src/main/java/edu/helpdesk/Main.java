@@ -178,6 +178,22 @@ public class Main {
                                 System.out.println("Ошибка: " + e.getMessage());
                             }
                         }
+                        case "15" -> {
+                            System.out.print("Номер страницы (начиная с 1): ");
+                            int page = Integer.parseInt(scanner.nextLine().trim());
+
+                            int pageSize = 5;
+                            List<edu.helpdesk.model.Ticket> pageTickets =
+                                    tickets.findPage(page, pageSize);
+
+                            if (pageTickets.isEmpty()) {
+                                System.out.println(
+                                        "На этой странице заявок нет.");
+                            } else {
+                                System.out.println("Страница " + page + ":");
+                                pageTickets.forEach(System.out::println);
+                            }
+                        }
                         case "0" -> running = false;
                         default -> System.out.println("Неизвестная команда.");
                     }
@@ -208,6 +224,7 @@ public class Main {
                 12 — удалить тег из заявки
                 13 — показать теги заявки
                 14 — найти заявки по тегу
+                15 — просмотр заявок по страницам
                 0  — выход
                 """);
     }

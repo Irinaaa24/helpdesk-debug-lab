@@ -28,4 +28,5 @@ public interface TicketRepository {
                                       TicketStatus oldStatus,
                                       TicketStatus newStatus,
                                       long changedBy);
+    List<Ticket> findPage(int page, int pageSize);
 }

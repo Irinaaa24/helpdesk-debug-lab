@@ -70,6 +70,33 @@ public class JdbcTicketRepository implements TicketRepository {
     }
 
     @Override
+    public List<Ticket> findPage(int page, int pageSize) {
+        if (page < 1) {
+            throw new IllegalArgumentException(
+                    "Номер страницы должен быть не меньше 1");
+        }
+
+        if (pageSize < 1) {
+            throw new IllegalArgumentException(
+                    "Размер страницы должен быть не меньше 1");
+        }
+
+        long offset = (long) (page - 1) * pageSize;
+
+        String sql = """
+                SELECT *
+                FROM tickets
+                ORDER BY id
+                LIMIT ? OFFSET ?
+                """;
+
+        return list(sql, ps -> {
+            ps.setInt(1, pageSize);
+            ps.setLong(2, offset);
+        });
+    }
+
+    @Override
     public int assign(long ticketId, long assigneeId) {
         String selectSql = "SELECT id FROM tickets WHERE id = ?";
         String updateSql = "UPDATE tickets SET assignee_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
